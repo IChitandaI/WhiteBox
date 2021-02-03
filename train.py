@@ -32,6 +32,8 @@ def train(
     train_data=Data_set(dir_img, 0.5)
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4)
 
+    criterion = nn.BCELoss()
+
     for epoch in range(epochs):
         G.train()
         D_blur.train()
@@ -54,10 +56,10 @@ def train(
             fake_label=fake_label.to(device=device, dtype=torch.float32)
 
             fake_out=G(fake).detach()
-            fake_output=guide_filter()
+            fake_output=guide_filter(fake, fake_out, r=1)
 
-            fake_blur=guild_filter(fake_output, fake_output)#Part 1. Blur GAN
-            real_blur=guild_filter(real, real)
+            fake_blur=guild_filter(fake_output, fake_output, r=5)#Part 1. Blur GAN
+            real_blur=guild_filter(real, real, r=5)
 
             fake_gray=color_shift(fake_output)#Part 2.Gray GAN
             real_gray=color_shift(real)
@@ -83,8 +85,8 @@ def train(
             D_gray_optimizer.step()
 
             fake_out=G(fake)
-            fake_output=guide_filter()
-            fake_blur=guild_filter(fake_output, fake_output)
+            fake_output=guide_filter(fake, fake_out, r=1)
+            fake_blur=guild_filter(fake_output, fake_output, r=5)
             fake_disc_blur=D_blur(fake_blur)
             loss_fake_blur=criterion(fake_disc_blur, fake_label)
 
