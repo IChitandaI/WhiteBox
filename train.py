@@ -1,10 +1,14 @@
 from network.net_build import *
 from superpix import slic, adaptive_slic, sscolor
+from VGG19 import VGG19
+from predata import Data_set, DataLoader
+from guild_filter_code import guide_filter
 
 import logging
 import os
 import sys
 from glob import glob
+import itertools
 
 import torch.nn as nn
 from torch import optim
@@ -14,6 +18,8 @@ import torch.nn.functional as F
 from PIL import Image
 from torch.utils.data import DataLoader
 from torch.distributions import Distribution
+from functools import partial
+from joblib import Parallel, delayed
 
 dir_img = 'data/imgs/'
 dir_real = 'data/real/'
@@ -54,9 +60,20 @@ class ColorShift(nn.Module):
     rgb = self.dist.sample()
     return ((im * rgb[None, :, None, None]) / rgb.sum() for im in img)
 
+class VariationLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+        pass
+    def forward(self, x):
+        b, c, h, w=x.shape
+        tv_h=torch.mean((x[:, :, 1:, :]-x[:, :, :-1, :])**2)
+        tv_w=torch.mean((x[:, :, :, 1:]-x[:, :, :, :-1])**2)
+        return (tv_h+tv_w)/(h*w*3)# try h*w*c?
+
+
 def train(
-          G,
-          D,
+          G_net,
+          D_net,
           device,
           epochs=1,
           batch_size=1,
@@ -64,15 +81,35 @@ def train(
           val_percent=0.1,
           save_cp=True,
           img_scale=0.5):
-    
+
+
+    superpixel_fn='sscolor'
+    SuperPixelDict = {
+      'slic': slic,
+      'adaptive_slic': adaptive_slic,
+      'sscolor': sscolor}
+    superpixel_kwarg: dict = {'seg_num': 200}
+
     train_data=Data_set(dir_img, 0.5)
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4)
-    
+
+    G=G_net()
+    D_blur=D_net()
+    D_gray=D_net()
+    G_optimizer=torch.optim.Adam(G.parameters, lr=lr)
+    D_optimizer=torch.optim.Adam(itertools.chain(D_blur.parameters, D_gray.parameters), lr=lr)
+
+    vgg=VGG19()
+
     color_shift=ColorShift()
     color_shift.setup(device=device)
 
     criterion = nn.BCELoss()
+    variation_loss=VariationLoss()
+    l1_loss=nn.L1Loss('mean')
 
+    self.superpixel_fn = partial(SuperPixelDict[superpixel_fn],
+                                 **superpixel_kwarg)
     for epoch in range(epochs):
         G.train()
         D_blur.train()
@@ -93,8 +130,8 @@ def train(
             real=real.to(device=device, dtype=torch.float32)
             real_label=real_label.to(device=device, dtype=torch.float32)
             fake_label=fake_label.to(device=device, dtype=torch.float32)
-
-            fake_out=G(fake).detach()
+            ###part of training disc
+            fake_out=G(fake)#.detach()
             fake_output=guide_filter(fake, fake_out, r=1)
 
             fake_blur=guild_filter(fake_output, fake_output, r=5)#Part 1. Blur GAN
@@ -104,55 +141,62 @@ def train(
 
             fake_disc_blur=D_blur(fake_blur)
             real_disc_blur=D_blur(real_blur)
+
             fake_disc_gray=D_gray(fake_gray)
             real_disc_gray=D_gray(real_gray)
 
             loss_real_blur=criterion(real_disc_blur, real_label)
             loss_fake_blur=criterion(fake_disc_blur, fake_label)
+
             loss_real_gray=criterion(real_disc_gray, real_label)
             loss_fake_gray=criterion(fake_disc_gray, fake_label)
 
             loss_blur=loss_real_blur+loss_fake_blur
             loss_gray=loss_real_gray+loss_fake_gray
 
-            D_blur_optimizer.zero_grad()
-            D_gray_optimizer.zero_grad()
-            loss_blur.backward()
-            loss_gray.backward()
-            D_blur_optimizer.step()
-            D_gray_optimizer.step()
+            all_loss=loss_blur+loss_gray
 
+            D_optimizer.zero_grad()
+
+            all_loss.backward()
+
+            D_optimizer.step()
+
+            ###part of training generator
             fake_out=G(fake)
             fake_output=guide_filter(fake, fake_out, r=1)
+
             fake_blur=guild_filter(fake_output, fake_output, r=5)
             fake_disc_blur=D_blur(fake_blur)
             loss_fake_blur=criterion(fake_disc_blur, fake_label)
 
-            G_optimizer.zero_grad()
-            loss_fake_blur.backward()
-            G_optimizer.step()
-
-            fake_out=G(fake)
-            fake_output=guide_filter()
-            fake_gray=color_shift(fake_output)
+            fake_gray, =color_shift(fake_output)
             fake_disc_gray=D_gray(fake_gray)
             loss_fake_gray=criterion(fake_disc_gray, fake_label)
-            G_optimizer.zero_grad()
-            loss_fake_gray.backward()
-            G_optimizer.step()
 
+            VGG1=vgg(fake)
+            VGG2=vgg(fake_output)
 
-            VGG1=VGG(fake)
-            VGG2=VGG(fake_output)
+            superpixel_img=torch.from_numpy(
+                        simple_superpixel(fake_output.detach().permute((0, 2, 3, 1)).cpu().numpy(),
+                        self.superpixel_fn)
+                        ).to(self.device).permute((0, 3, 1, 2))
 
-            superpixel_img=SuperPixel(fake)
+            VGG3=vgg(superpixel_img)
+            _, c, h, w=VGG2.shape()
+            loss_superpixel=l1_loss(VGG3, VGG2)/(c*h*w)
 
-            VGG3=VGG(superpixel_img)
+            loss_content=l1_loss(VGG1, VGG2)/(c*h*w)
 
-            loss1=Get_loss(VGG1, VGG3)
-            loss2=Get_loss(VGG2, VGG3)
+            loss_tv=variation_loss(fake_output)
 
-            loss_sum=loss1+loss2
+            #parameters here
+            w1=0.1
+            w2=0.1
+            w3=200.0
+            w4=200.0
+            w5=10000.0
+            loss_sum=loss_fake_blur*w1+loss_fake_gray*w2+loss_superpixel*w3+loss_content*w4+loss_tv*w5
 
             G_optimizer.zero_grad()
             loss_sum.backward()
