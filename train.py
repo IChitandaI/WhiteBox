@@ -152,8 +152,8 @@ def train(
             loss_real_gray=criterion(real_disc_gray, real_label)
             loss_fake_gray=criterion(fake_disc_gray, fake_label)
 
-            loss_blur=loss_real_blur+loss_fake_blur
-            loss_gray=loss_real_gray+loss_fake_gray
+            loss_blur=0.5*(loss_real_blur+loss_fake_blur)
+            loss_gray=0.5*(loss_real_gray+loss_fake_gray)
 
             all_loss=loss_blur+loss_gray
 
@@ -204,5 +204,10 @@ def train(
             G_optimizer.step()
 
 
-
-
+if __name__ == "__main__":
+    G_net=generator(n_channels=3, n_classes=3)
+	D_net=discriminator(n_channels=3, n_classes=1)
+    device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')
+    G_net.to(device=device)
+	D_net.to(device=device)
+    train(G_net, D_net, device=device)

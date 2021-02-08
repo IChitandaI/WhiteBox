@@ -71,9 +71,8 @@ class VariationLoss(nn.Module):
         return (tv_h+tv_w)/(h*w*3)# try h*w*c?
 
 
-def train(
+def pretrain(
           G_net,
-          D_net,
           device,
           epochs=1,
           batch_size=1,
@@ -94,17 +93,13 @@ def train(
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4)
 
     G=G_net()
-    D_blur=D_net()
-    D_gray=D_net()
     G_optimizer=torch.optim.Adam(G.parameters, lr=lr)
-    D_optimizer=torch.optim.Adam(itertools.chain(D_blur.parameters, D_gray.parameters), lr=lr)
 
     vgg=VGG19()
 
     color_shift=ColorShift()
     color_shift.setup(device=device)
 
-    criterion = nn.BCELoss()
     variation_loss=VariationLoss()
     l1_loss=nn.L1Loss('mean')
 
@@ -112,36 +107,21 @@ def train(
                                  **superpixel_kwarg)
     for epoch in range(epochs):
         G.train()
-        D_blur.train()
-        D_gray.train()
 
         for batch in train_loader:
             fake=batch['fake']
-            real=batch['real']
             
             num+=1
             size=fake.size(0)
 
-            real_label=torch.ones(size)
             fake_lable=torch.zeros(size)
-
-            
+         
             fake=fake.to(device=device, dtype=torch.float32)
-            real=real.to(device=device, dtype=torch.float32)
-            real_label=real_label.to(device=device, dtype=torch.float32)
             fake_label=fake_label.to(device=device, dtype=torch.float32)
            
             ###part of training generator
             fake_out=G(fake)
             fake_output=guide_filter(fake, fake_out, r=1)
-
-            fake_blur=guild_filter(fake_output, fake_output, r=5)
-            fake_disc_blur=D_blur(fake_blur)
-            loss_fake_blur=criterion(fake_disc_blur, fake_label)
-
-            fake_gray, =color_shift(fake_output)
-            fake_disc_gray=D_gray(fake_gray)
-            loss_fake_gray=criterion(fake_disc_gray, fake_label)
 
             VGG1=vgg(fake)
             VGG2=vgg(fake_output)
@@ -160,17 +140,21 @@ def train(
             loss_tv=variation_loss(fake_output)
 
             #parameters here
-            w1=0.1
-            w2=0.1
+            #w1=0.1
+            #w2=0.1
             w3=200.0
             w4=200.0
             w5=10000.0
-            loss_sum=loss_fake_blur*w1+loss_fake_gray*w2+loss_superpixel*w3+loss_content*w4+loss_tv*w5
+            loss_sum=loss_superpixel*w3+loss_content*w4+loss_tv*w5
 
             G_optimizer.zero_grad()
             loss_sum.backward()
             G_optimizer.step()
 
-
+if __name__ == "__main__":
+    G_net=generator(n_channels=3, n_classes=3)
+    device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')
+    G_net.to(device=device)
+    pretrain(G_net, device=device)
 
 

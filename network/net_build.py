@@ -44,11 +44,11 @@ class discriminator(nn.Module):
         self.func1_1=ConvSpecLRelu(n_channels, 32, kernel_size=3, stride=2)
         self.func1_2=ConvSpecLRelu(n_channels, 32, kernel_size=3, stride=1)
 
-        self.func2_1=ConvSpecLRelu(n_channels, 64, kernel_size=3, stride=2)
-        self.func2_2=ConvSpecLRelu(n_channels, 64, kernel_size=3, stride=1)
+        self.func2_1=ConvSpecLRelu(32, 64, kernel_size=3, stride=2)
+        self.func2_2=ConvSpecLRelu(32, 64, kernel_size=3, stride=1)
 
-        self.func3_1=ConvSpecLRelu(n_channels, 128, kernel_size=3, stride=2)
-        self.func3_2=ConvSpecLRelu(n_channels, 128, kernel_size=3, stride=1)
+        self.func3_1=ConvSpecLRelu(64, 128, kernel_size=3, stride=2)
+        self.func3_2=ConvSpecLRelu(64, 128, kernel_size=3, stride=1)
 
         self.out=nn.Conv2d(128, 1, kernel_size=1, stride=1)
     
