@@ -1,7 +1,7 @@
 from network.net_build import *
 from superpix import slic, adaptive_slic, sscolor
 from VGG19 import VGG19
-from predata import Data_set
+from predata import Data_set, DataLoader
 from guild_filter_code import guide_filter
 
 import logging
@@ -20,7 +20,7 @@ from torch.utils.data import DataLoader
 from torch.distributions import Distribution
 from functools import partial
 from joblib import Parallel, delayed
-from typing import List, Tuple
+
 dir_img = 'data/imgs/'
 dir_real = 'data/real/'
 dir_checkpoint = 'checkpoints/'
@@ -90,14 +90,14 @@ def train(
       'sscolor': sscolor}
     superpixel_kwarg: dict = {'seg_num': 200}
 
-    train_data=Data_set(dir_img,dir_real, 0.5)
+    train_data=Data_set(dir_img, 0.5)
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4)
 
     G=G_net()
     D_blur=D_net()
     D_gray=D_net()
-    G_optimizer=torch.optim.Adam(G.parameters, lr=2e-4,betas=(0.5, 0.99))
-    D_optimizer=torch.optim.Adam(itertools.chain(D_blur.parameters(), D_gray.parameters()), lr=2e-4,betas=(0.5, 0.99))
+    G_optimizer=torch.optim.Adam(G.parameters, lr=lr)
+    D_optimizer=torch.optim.Adam(itertools.chain(D_blur.parameters, D_gray.parameters), lr=lr)
 
     vgg=VGG19()
 
@@ -130,39 +130,7 @@ def train(
             real=real.to(device=device, dtype=torch.float32)
             real_label=real_label.to(device=device, dtype=torch.float32)
             fake_label=fake_label.to(device=device, dtype=torch.float32)
-            ###part of training disc
-            fake_out=G(fake)#.detach()
-            fake_output=guide_filter(fake, fake_out, r=1)
-
-            fake_blur=guild_filter(fake_output, fake_output, r=5, eps=2e-1)
-            #Part 1. Blur GAN
-            real_blur=guild_filter(real, real, r=5)
-
-            fake_gray, real_gray=color_shift(fake_output, real)#Part 2.Gray GAN
-
-            fake_disc_blur=D_blur(fake_blur)
-            real_disc_blur=D_blur(real_blur)
-
-            fake_disc_gray=D_gray(fake_gray)
-            real_disc_gray=D_gray(real_gray)
-
-            loss_real_blur=criterion(real_disc_blur, real_label)
-            loss_fake_blur=criterion(fake_disc_blur, fake_label)
-
-            loss_real_gray=criterion(real_disc_gray, real_label)
-            loss_fake_gray=criterion(fake_disc_gray, fake_label)
-
-            loss_blur=loss_real_blur+loss_fake_blur
-            loss_gray=loss_real_gray+loss_fake_gray
-
-            all_loss=loss_blur+loss_gray
-
-            D_optimizer.zero_grad()
-
-            all_loss.backward()
-
-            D_optimizer.step()
-
+           
             ###part of training generator
             fake_out=G(fake)
             fake_output=guide_filter(fake, fake_out, r=1)
