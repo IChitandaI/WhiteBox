@@ -32,15 +32,13 @@ def pre_dict(net,
 
     with torch.no_grad():
         output=net(img)
-        probs=probs.squeeze(0)
         tf=transforms.compose(
             transforms.ToPILImage()
             transforms.Resize(full_img.size[1])
             transforms.ToTensor()
         )
-        probs=tf(probs.cpu())
-        full_mask=probs.cpu().numpy()
-    return full_mask>out_threshold
+        output=tf(output.cpu())
+    return output.cpu().numpy()
 
 def out_to_image(out):
     return Image.fromarray((out*255).astype(np.uint8))
