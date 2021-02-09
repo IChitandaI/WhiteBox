@@ -3,6 +3,9 @@ import torch.nn as nn
 import torchvision.models as models
 from torchvision import transforms
 
+def denormalize(im, mean=0.5, std=0.5):
+  return im * std + mean
+
 class VGG19(nn.Module):
     def __init__(self, output_index=26):
         super().__init__()
@@ -12,7 +15,7 @@ class VGG19(nn.Module):
     def process(self, x):
         normalize=transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                  std=[0.229, 0.224, 0.225])
-        x=normalize(x)
+        x=normalize(denormalize(x))
     def forward(self, x):
         x=self.features[:self.output_index](x)
         return x

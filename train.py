@@ -21,8 +21,8 @@ from torch.distributions import Distribution
 from functools import partial
 from joblib import Parallel, delayed
 from typing import List, Tuple
-dir_img = 'data/imgs/'
-dir_real = 'data/real/'
+dir_img = './data/fake/'
+dir_real = './data/real/'
 dir_checkpoint = 'checkpoints/'
 data_num = 0
 
@@ -74,7 +74,6 @@ class VariationLoss(nn.Module):
 def train(
           G_net,
           D_net,
-          device,
           epochs=1,
           batch_size=1,
           lr=0.001,
@@ -93,10 +92,12 @@ def train(
     train_data=Data_set(dir_img,dir_real, 0.5)
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4)
 
-    G=G_net()
-    D_blur=D_net()
-    D_gray=D_net()
-    G_optimizer=torch.optim.Adam(G.parameters, lr=2e-4,betas=(0.5, 0.99))
+    device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')
+    G=generator(n_channels=3, n_classes=3).to(device=device)
+    D_blur=discriminator(n_channels=3, n_classes=1).to(device=device)
+    D_gray=discriminator(n_channels=3, n_classes=1).to(device=device)
+
+    G_optimizer=torch.optim.Adam(G.parameters(), lr=2e-4, betas=(0.5, 0.99))
     D_optimizer=torch.optim.Adam(itertools.chain(D_blur.parameters(), D_gray.parameters()), lr=2e-4,betas=(0.5, 0.99))
 
     vgg=VGG19()
@@ -205,9 +206,4 @@ def train(
 
 
 if __name__ == "__main__":
-    G_net=generator(n_channels=3, n_classes=3)
-	D_net=discriminator(n_channels=3, n_classes=1)
-    device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')
-    G_net.to(device=device)
-	D_net.to(device=device)
-    train(G_net, D_net, device=device)
+  train(generator, discriminator)

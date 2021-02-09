@@ -4,8 +4,8 @@ import torch.nn.functional as F
 from .net import *
 
 class generator(nn.Module):
-    def __init__(n_channels, n_classes):
-        super.__init__()
+    def __init__(self, n_channels, n_classes):
+        super().__init__()
         self.down1=ConvLRelu(n_channels, 32, kernel_size=7, stride=1)
         self.down2_1=ConvLRelu(32, 32, kernel_size=3, stride=2)
         self.down2_2=ConvLRelu(32, 64, kernel_size=3, stride=1)
@@ -19,8 +19,8 @@ class generator(nn.Module):
         self.up2=ConvLRelu(128, 64, kernel_size=3, stride=1)
         self.up3=ConvLRelu(64, 64, kernel_size=3, stride=1)
 
-        self.out=conv2d(64, n_classes, kernel_size=7, stride=1)
-    def forward(x):
+        self.out=nn.Conv2d(64, n_classes, kernel_size=7, stride=1)
+    def forward(self,x):
         x1=self.down1(x)
         x2=self.down2_1(x1)
         x2=self.down2_2(x2)
@@ -39,8 +39,8 @@ class generator(nn.Module):
 
         
 class discriminator(nn.Module):
-    def __init__(n_channels, n_classes):
-        super.__init__()
+    def __init__(self, n_channels, n_classes):
+        super().__init__()
         self.func1_1=ConvSpecLRelu(n_channels, 32, kernel_size=3, stride=2)
         self.func1_2=ConvSpecLRelu(n_channels, 32, kernel_size=3, stride=1)
 
@@ -52,7 +52,7 @@ class discriminator(nn.Module):
 
         self.out=nn.Conv2d(128, 1, kernel_size=1, stride=1)
     
-    def forward(x):
+    def forward(self,x):
         x=self.func1_1(x)
         x=self.func1_2(x)
         x=self.func2_1(x)
