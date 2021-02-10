@@ -22,19 +22,17 @@ predict_pic_path='predict_pic/img'
 
 def pre_dict(net,
              full_img,
-             device,
-             scale_factor=1,
-             out_threshold=0.5):
+             device):
     net.eval()
-    img=torch.from_numpy(Data_set.resize(full_img, scale_factor)).type(torch.FloatTensor)
+    img=torch.from_numpy(Data_set.resize(full_img)).type(torch.FloatTensor)
     img=img.unsqueeze(0)
     img=img.to(device=device, dtype=torch.float32)
 
     with torch.no_grad():
         output=net(img)
         tf=transforms.compose(
-            transforms.ToPILImage()
-            transforms.Resize(full_img.size[1])
+            transforms.ToPILImage(),
+            transforms.Resize(full_img.size[1]),
             transforms.ToTensor()
         )
         output=tf(output.cpu())
@@ -50,7 +48,7 @@ if __name__=="__main__":
     net.load_state_dict(torch.load(net_path, map_location=device))
 
     img = Image.open(predict_pic_path)
-    out=pre_dict(img=img, scale_factor=0.5)
+    out=pre_dict(img=img)
     out_image=out_to_image(out)
     plot_img_and_mask(img, out)
 

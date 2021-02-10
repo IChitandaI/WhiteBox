@@ -16,18 +16,16 @@ class Data_set(Dataset):
         self.dir_fake = dir_fake
         self.dir_real = dir_real
         self.scale=scale
-        self.name = [splitext(file)[0] for file in listdir(
+        self.name1 = [splitext(file)[0] for file in listdir(
             dir_fake) if not file.startswith('.')]
+        self.name2 = [splitext(file)[0] for file in listdir(
+            dir_real) if not file.startswith('.')]
 
     def __len__(self):
-        return len(self.name)
+        return min(len(self.name1),len(self.name2))
     @classmethod
-    def resize(cls, img, scale):
-        W, H = img.size
-        new_W = int(W*scale)
-        new_H = int(H*scale)
-        new_img = img.resize((new_W, new_H))
-        a = np.array(new_img)
+    def resize(cls, img):
+        a = np.array(img)
         if len(a.shape) == 2:
             a = np.expand_dims(a, axis=2)
         a = a.transpose((2, 0, 1))
@@ -36,18 +34,16 @@ class Data_set(Dataset):
         return a
 
     def __getitem__(self, i):
-        x = self.name[i]
-        file_fake = glob(self.dir_fake + x + '.*')
-        file_real = glob(self.dir_real + x + '_real.*')
+        file_fake = glob(self.dir_fake + self.name1[i] + '.*')
+        file_real = glob(self.dir_real + self.name2[i] + '.*')
         try:
-            img = Image.open(file_fake[0])
-            mask = Image.open(file_real[0])
+            fake = Image.open(file_fake[0])
+            real = Image.open(file_real[0])
         except:
-            print(fike_fake)
+            print(file_fake)
             print(file_real)
-        fake = self.resize(fake, self.scale)
-        real = self.resize(real, self.scale)
-
+        fake = self.resize(fake)
+        real = self.resize(real)
         return {
             'fake': torch.from_numpy(fake).type(torch.FloatTensor),
             'real': torch.from_numpy(real).type(torch.FloatTensor),

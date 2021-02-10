@@ -1,7 +1,7 @@
 from network.net_build import *
 from superpix import slic, adaptive_slic, sscolor
 from VGG19 import VGG19
-from predata import Data_set, DataLoader
+from predata import Data_set
 from guild_filter_code import guide_filter
 
 import logging
@@ -20,10 +20,11 @@ from torch.utils.data import DataLoader
 from torch.distributions import Distribution
 from functools import partial
 from joblib import Parallel, delayed
+from typing import List, Tuple
 
-dir_img = 'data/imgs/'
-dir_real = 'data/real/'
-dir_checkpoint = 'checkpoints/'
+dir_img = './data/fake/'
+dir_real = './data/real/'
+dir_checkpoint = './checkpoints/'
 data_num = 0
 
 def simple_superpixel(batch_image: np.ndarray, superpixel_fn: callable) -> np.ndarray:
@@ -76,7 +77,7 @@ def pretrain(
           device,
           epochs=1,
           batch_size=1,
-          lr=0.001,
+          lr=2e-4,
           val_percent=0.1,
           save_cp=True,
           img_scale=0.5):
@@ -89,67 +90,27 @@ def pretrain(
       'sscolor': sscolor}
     superpixel_kwarg: dict = {'seg_num': 200}
 
-    train_data=Data_set(dir_img, 0.5)
+    train_data=Data_set(dir_img, dir_real)
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4)
-
-    G=G_net()
-    G_optimizer=torch.optim.Adam(G.parameters, lr=lr)
-
-    vgg=VGG19()
-
-    color_shift=ColorShift()
-    color_shift.setup(device=device)
-
-    variation_loss=VariationLoss()
+    batches=len(train_loader)
+    G=G_net
+    G_optimizer=torch.optim.Adam(G.parameters(), lr=lr)
     l1_loss=nn.L1Loss('mean')
 
-    self.superpixel_fn = partial(SuperPixelDict[superpixel_fn],
-                                 **superpixel_kwarg)
     for epoch in range(epochs):
         G.train()
-
+        num=0
         for batch in train_loader:
             fake=batch['fake']
-            
             num+=1
-            size=fake.size(0)
-
-            fake_lable=torch.zeros(size)
-         
-            fake=fake.to(device=device, dtype=torch.float32)
-            fake_label=fake_label.to(device=device, dtype=torch.float32)
-           
-            ###part of training generator
             fake_out=G(fake)
-            fake_output=guide_filter(fake, fake_out, r=1)
-
-            VGG1=vgg(fake)
-            VGG2=vgg(fake_output)
-
-            superpixel_img=torch.from_numpy(
-                        simple_superpixel(fake_output.detach().permute((0, 2, 3, 1)).cpu().numpy(),
-                        self.superpixel_fn)
-                        ).to(self.device).permute((0, 3, 1, 2))
-
-            VGG3=vgg(superpixel_img)
-            _, c, h, w=VGG2.shape()
-            loss_superpixel=l1_loss(VGG3, VGG2)/(c*h*w)
-
-            loss_content=l1_loss(VGG1, VGG2)/(c*h*w)
-
-            loss_tv=variation_loss(fake_output)
-
-            #parameters here
-            #w1=0.1
-            #w2=0.1
-            w3=200.0
-            w4=200.0
-            w5=10000.0
-            loss_sum=loss_superpixel*w3+loss_content*w4+loss_tv*w5
-
+            loss_sum=l1_loss(fake,fakeout)
             G_optimizer.zero_grad()
             loss_sum.backward()
             G_optimizer.step()
+            if(num % 100 == 0):
+                print("epoch:{}/{} batch:{}/{}".format(epoch,epochs,num*batch_size,batches))
+    torch.save(G.state_dict(), dir_checkpoint +f'checkpoint_epoch{epochs}.pth')
 
 if __name__ == "__main__":
     G_net=generator(n_channels=3, n_classes=3)

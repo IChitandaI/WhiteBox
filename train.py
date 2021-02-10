@@ -14,6 +14,7 @@ import torch.nn as nn
 from torch import optim
 import numpy as np
 import torch
+import loss
 import torch.nn.functional as F
 from PIL import Image
 from torch.utils.data import DataLoader
@@ -108,8 +109,8 @@ def train(
     criterion = nn.BCELoss()
     variation_loss=VariationLoss()
     l1_loss=nn.L1Loss('mean')
-
-    self.superpixel_fn = partial(SuperPixelDict[superpixel_fn],
+    lsgan_loss = LSGanLoss()
+    superpixel_fn = partial(SuperPixelDict[superpixel_fn],
                                  **superpixel_kwarg)
     for epoch in range(epochs):
         G.train()
@@ -122,22 +123,16 @@ def train(
             
             num+=1
             size=fake.size(0)
-
-            real_label=torch.ones(size)
-            fake_lable=torch.zeros(size)
-
             
             fake=fake.to(device=device, dtype=torch.float32)
             real=real.to(device=device, dtype=torch.float32)
-            real_label=real_label.to(device=device, dtype=torch.float32)
-            fake_label=fake_label.to(device=device, dtype=torch.float32)
             ###part of training disc
             fake_out=G(fake)#.detach()
             fake_output=guide_filter(fake, fake_out, r=1)
 
             fake_blur=guild_filter(fake_output, fake_output, r=5, eps=2e-1)
             #Part 1. Blur GAN
-            real_blur=guild_filter(real, real, r=5)
+            real_blur=guild_filter(real, real, r=5,eps=2e-1)
 
             fake_gray, real_gray=color_shift(fake_output, real)#Part 2.Gray GAN
 
@@ -147,14 +142,8 @@ def train(
             fake_disc_gray=D_gray(fake_gray)
             real_disc_gray=D_gray(real_gray)
 
-            loss_real_blur=criterion(real_disc_blur, real_label)
-            loss_fake_blur=criterion(fake_disc_blur, fake_label)
-
-            loss_real_gray=criterion(real_disc_gray, real_label)
-            loss_fake_gray=criterion(fake_disc_gray, fake_label)
-
-            loss_blur=0.5*(loss_real_blur+loss_fake_blur)
-            loss_gray=0.5*(loss_real_gray+loss_fake_gray)
+            loss_blur=lsgan_loss._d_loss(real_disc_blur,fake_disc_blur)
+            loss_gray=lsgan_loss._d_loss(real_disc_gray,fake_disc_gray)
 
             all_loss=loss_blur+loss_gray
 
@@ -165,24 +154,24 @@ def train(
             D_optimizer.step()
 
             ###part of training generator
-            fake_out=G(fake)
-            fake_output=guide_filter(fake, fake_out, r=1)
+            #fake_out=G(fake)
+            #fake_output=guide_filter(fake, fake_out, r=1)
 
-            fake_blur=guild_filter(fake_output, fake_output, r=5)
+            #fake_blur=guild_filter(fake_output, fake_output, r=5)
             fake_disc_blur=D_blur(fake_blur)
-            loss_fake_blur=criterion(fake_disc_blur, fake_label)
+            loss_fake_blur=lsgan_loss._g_loss(fake_disc_blur)
 
             fake_gray, =color_shift(fake_output)
             fake_disc_gray=D_gray(fake_gray)
-            loss_fake_gray=criterion(fake_disc_gray, fake_label)
+            loss_fake_gray=lsgan_loss._g_loss(fake_disc_gray)
 
             VGG1=vgg(fake)
             VGG2=vgg(fake_output)
 
             superpixel_img=torch.from_numpy(
                         simple_superpixel(fake_output.detach().permute((0, 2, 3, 1)).cpu().numpy(),
-                        self.superpixel_fn)
-                        ).to(self.device).permute((0, 3, 1, 2))
+                        superpixel_fn)
+                        ).to(device).permute((0, 3, 1, 2))
 
             VGG3=vgg(superpixel_img)
             _, c, h, w=VGG2.shape()
@@ -203,6 +192,9 @@ def train(
             G_optimizer.zero_grad()
             loss_sum.backward()
             G_optimizer.step()
+    torch.save(G.state_dict(), dir_checkpoint +f'checkpoint_epoch{epochs}.pth')
+    torch.save(D_blur.state_dict(), dir_checkpoint +f'checkpoint_epoch{epochs}.pth')
+    torch.save(D_gray.state_dict(), dir_checkpoint +f'checkpoint_epoch{epochs}.pth')
 
 
 if __name__ == "__main__":
