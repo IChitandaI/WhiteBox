@@ -1,6 +1,6 @@
 from network.net_build import *
 from superpix import slic, adaptive_slic, sscolor
-from VGG19 import VGG19
+from VGG19 import VGGCaffePreTrained
 from predata import Data_set
 from guild_filter_code import guide_filter
 
@@ -14,7 +14,7 @@ import torch.nn as nn
 from torch import optim
 import numpy as np
 import torch
-import loss
+from loss import *
 import torch.nn.functional as F
 from PIL import Image
 from torch.utils.data import DataLoader
@@ -101,10 +101,14 @@ def train(
     G_optimizer=torch.optim.Adam(G.parameters(), lr=2e-4, betas=(0.5, 0.99))
     D_optimizer=torch.optim.Adam(itertools.chain(D_blur.parameters(), D_gray.parameters()), lr=2e-4,betas=(0.5, 0.99))
 
-    vgg=VGG19()
+    vgg=VGGCaffePreTrained().to(device)
 
     color_shift=ColorShift()
     color_shift.setup(device=device)
+    vgg.setup(device=device)
+    for parma in vgg.parameters():
+        parma.requires_grad = False
+
 
     criterion = nn.BCELoss()
     variation_loss=VariationLoss()
@@ -116,7 +120,7 @@ def train(
         G.train()
         D_blur.train()
         D_gray.train()
-
+        num = 0
         for batch in train_loader:
             fake=batch['fake']
             real=batch['real']
@@ -130,9 +134,9 @@ def train(
             fake_out=G(fake)#.detach()
             fake_output=guide_filter(fake, fake_out, r=1)
 
-            fake_blur=guild_filter(fake_output, fake_output, r=5, eps=2e-1)
+            fake_blur=guide_filter(fake_output, fake_output, r=5, eps=2e-1)
             #Part 1. Blur GAN
-            real_blur=guild_filter(real, real, r=5,eps=2e-1)
+            real_blur=guide_filter(real, real, r=5,eps=2e-1)
 
             fake_gray, real_gray=color_shift(fake_output, real)#Part 2.Gray GAN
 
@@ -154,10 +158,10 @@ def train(
             D_optimizer.step()
 
             ###part of training generator
-            #fake_out=G(fake)
-            #fake_output=guide_filter(fake, fake_out, r=1)
+            fake_out=G(fake)
+            fake_output=guide_filter(fake, fake_out, r=1)
 
-            #fake_blur=guild_filter(fake_output, fake_output, r=5)
+            fake_blur=guide_filter(fake_output, fake_output, r=5)
             fake_disc_blur=D_blur(fake_blur)
             loss_fake_blur=lsgan_loss._g_loss(fake_disc_blur)
 
@@ -174,7 +178,7 @@ def train(
                         ).to(device).permute((0, 3, 1, 2))
 
             VGG3=vgg(superpixel_img)
-            _, c, h, w=VGG2.shape()
+            _, c, h, w=VGG2.shape
             loss_superpixel=l1_loss(VGG3, VGG2)/(c*h*w)
 
             loss_content=l1_loss(VGG1, VGG2)/(c*h*w)

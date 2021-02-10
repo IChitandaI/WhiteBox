@@ -75,20 +75,11 @@ class VariationLoss(nn.Module):
 def pretrain(
           G_net,
           device,
-          epochs=1,
-          batch_size=1,
+          epochs=100,
+          batch_size=5,
           lr=2e-4,
           val_percent=0.1,
-          save_cp=True,
-          img_scale=0.5):
-
-
-    superpixel_fn='sscolor'
-    SuperPixelDict = {
-      'slic': slic,
-      'adaptive_slic': adaptive_slic,
-      'sscolor': sscolor}
-    superpixel_kwarg: dict = {'seg_num': 200}
+          save_cp=True):
 
     train_data=Data_set(dir_img, dir_real)
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4)
@@ -101,15 +92,15 @@ def pretrain(
         G.train()
         num=0
         for batch in train_loader:
-            fake=batch['fake']
+            fake=batch['fake'].to(device)
             num+=1
             fake_out=G(fake)
-            loss_sum=l1_loss(fake,fakeout)
+            loss_sum=l1_loss(fake,fake_out)
             G_optimizer.zero_grad()
             loss_sum.backward()
             G_optimizer.step()
-            if(num % 100 == 0):
-                print("epoch:{}/{} batch:{}/{}".format(epoch,epochs,num*batch_size,batches))
+            if(num % 1 == 0):
+                print("epoch:{}/{} batch:{}/{}".format(epoch,epochs,num,batches))
     torch.save(G.state_dict(), dir_checkpoint +f'checkpoint_epoch{epochs}.pth')
 
 if __name__ == "__main__":
