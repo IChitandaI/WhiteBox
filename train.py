@@ -114,8 +114,7 @@ def train(
 		variation_loss=VariationLoss()
 		l2_loss=nn.L2Loss('mean')
 		lsgan_loss = LSGanLoss()
-		superpixel_fn = partial(SuperPixelDict[superpixel_fn],
-																 **superpixel_kwarg)
+		superpixel_fn = partial(SuperPixelDict[superpixel_fn],**superpixel_kwarg)
 		for epoch in range(epochs):
 				G.train()
 				D_blur.train()
