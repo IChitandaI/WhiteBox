@@ -99,8 +99,9 @@ def pretrain(
             G_optimizer.zero_grad()
             loss_sum.backward()
             G_optimizer.step()
-            if(num % 1 == 0):
+            if(num % 5 == 0):
                 print("epoch:{}/{} batch:{}/{}".format(epoch,epochs,num,batches))
+                print("loss=", loss)
     torch.save(G.state_dict(), dir_checkpoint +f'checkpoint_epoch{epochs}.pth')
 
 if __name__ == "__main__":

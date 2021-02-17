@@ -101,11 +101,12 @@ def train(
 		G_optimizer=torch.optim.Adam(G.parameters(), lr=2e-4, betas=(0.5, 0.99))
 		D_optimizer=torch.optim.Adam(itertools.chain(D_blur.parameters(), D_gray.parameters()), lr=2e-4,betas=(0.5, 0.99))
 
-		vgg=VGGCaffePreTrained().to(device)
+		vgg=VGGCaffePreTrained()
 
 		color_shift=ColorShift()
 		color_shift.setup(device=device)
 		vgg.setup(device=device)
+		
 		for parma in vgg.parameters():
 				parma.requires_grad = False
 
@@ -160,7 +161,7 @@ def train(
 						fake_out=G(fake)
 						fake_output=guide_filter(fake, fake_out, r=1)
 
-						fake_blur=guide_filter(fake_output, fake_output, r=5)
+						fake_blur=guide_filter(fake_output, fake_output, r=5, eps=2e-1)
 						fake_disc_blur=D_blur(fake_blur)
 						loss_fake_blur=lsgan_loss._g_loss(fake_disc_blur)
 
