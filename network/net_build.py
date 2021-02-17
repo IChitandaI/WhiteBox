@@ -14,6 +14,8 @@ class generator(nn.Module):
 
         #self.block=ResidualBlock(128, 128, kernel_size=3, stride=1)
         self.block = nn.Sequential(*[ResidualBlock(128, 128, kernel_size=3, stride=1) for i in range(4)])
+        #There should be 4 different residualblock net
+        
         self.resize=nn.UpsamplingBilinear2d(scale_factor=2)
 
         self.up1=ConvLRelu(128, 64, kernel_size=3, stride=1)
