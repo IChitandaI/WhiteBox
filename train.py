@@ -2,7 +2,7 @@ from network.net_build import *
 from superpix import slic, adaptive_slic, sscolor
 from VGG19 import VGGCaffePreTrained
 from predata import Data_set
-from guild_filter_code import guide_filter
+from guide_filter_code import guide_filter
 from loss import *
 
 import logging
@@ -187,7 +187,7 @@ def train(
 
 						#parameters here
 						w1=0.1
-						w2=0.1
+						w2=1.0
 						w3=200.0
 						w4=200.0
 						w5=10000.0

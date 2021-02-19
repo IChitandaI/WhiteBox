@@ -1,6 +1,7 @@
 from network.net_build import *
 from predata import Data_set
 from data_vis import plot_img_and_mask
+from guide_filter_code import guide_filter
 
 import logging
 import os
@@ -30,6 +31,7 @@ def pre_dict(net,
 
     with torch.no_grad():
         output=net(img)
+        output=guide_filter(output, output, r=5, eps=2e-1)
         output=output.squeeze(0)
         tf=transforms.Compose(
             [transforms.ToPILImage(),

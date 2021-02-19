@@ -2,7 +2,7 @@ from network.net_build import *
 from superpix import slic, adaptive_slic, sscolor
 from VGG19 import VGG19
 from predata import Data_set
-from guild_filter_code import guide_filter
+from guide_filter_code import guide_filter
 
 import logging
 import os
@@ -95,7 +95,7 @@ def pretrain(
             fake=batch['fake'].to(device)
             num+=1
             fake_out=G(fake)
-            loss_sum=l1_loss(fake,fake_out)
+            loss_sum=l1_loss(fake, fake_out)
             G_optimizer.zero_grad()
             loss_sum.backward()
             G_optimizer.step()
